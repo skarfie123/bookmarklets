@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "bookmarklets"
-version = "0.1.0"
+version = "0.0.1"
 description = "Tool to develop bookmarklets"
 authors = ["skarfie123 <rahulpai@rocketmail.com>"]
 readme = "README.md"
@@ -8,6 +8,18 @@ readme = "README.md"
 [tool.poetry.dependencies]
 python = "^3.10"
 
+[tool.poetry.group.dev]
+optional = true
+
+[tool.poetry.group.dev.dependencies]
+bandit = "^1.7.5"
+pylama = "^8.4.1"
+flake8 = "^6.1.0"
+mypy = "^1.5.1"
+black = "^23.9.1"
+
+[tool.poetry.scripts]
+bookmarklets = "bookmarklets.__main__:main"
 
 [build-system]
 requires = ["poetry-core"]
