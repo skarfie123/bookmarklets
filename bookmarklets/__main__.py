@@ -1,6 +1,8 @@
 import pathlib
+import re
 import urllib.parse
 import webbrowser
+from io import TextIOWrapper
 from pathlib import Path
 from typing import Annotated
 
@@ -16,19 +18,38 @@ cli = typer.Typer(
 Folder = Annotated[Path, typer.Argument(help="Folder to save the bookmarklets")]
 
 
-def _get_code(folder: Path) -> dict[str, str]:
+def _parse_metadata(f: TextIOWrapper) -> dict[str, str]:
+    metadata: dict[str, str] = {}
+    for line in f.readlines():
+        if not line.startswith("//"):
+            return metadata
+        # each metadata like will be of the form:
+        # "// @key value"
+        # parse this with regex:
+        m = re.match(r"// @(\w+) (\S.*)", line)
+        if m:
+            metadata[m.group(1)] = m.group(2)
+
+    return metadata
+
+
+def _get_code(folder: Path) -> dict[str, tuple[str, dict[str, str]]]:
     code = {}
     code_files = sorted(file for file in folder.iterdir() if file.suffix == ".js")
     for file in code_files:
         with open(file, encoding="utf-8") as f:
-            code[file.name[:-3]] = f.read()
+            metadata = {}
+            if f.readline().startswith("//"):
+                metadata = _parse_metadata(f)
+            code[file.name[:-3]] = (f.read(), metadata)
+
     return code
 
 
 def _get_bookmarklets(folder: Path):
     all_code = _get_code(folder)
     return {
-        name: f"javascript:(() => {{{urllib.parse.quote(code)}}})()"
+        name: (f"javascript:(() => {{{urllib.parse.quote(code[0])}}})()", code[1])
         for name, code in all_code.items()
     }
 
@@ -55,10 +76,19 @@ def server(
 
     @app.get("/", response_class=HTMLResponse)
     def root():
-        links = "\n".join(
-            f'<p><a class="bookmarklet" href="{bookmarklet}">{name}</a></p>'
-            for name, bookmarklet in _get_bookmarklets(folder).items()
-        )
+        links = []
+        for name, bookmarklet in _get_bookmarklets(folder).items():
+            code, metadata = bookmarklet
+            author = ""
+            if "author" in metadata:
+                if "url" in metadata:
+                    author = f' by <a href="{metadata["url"]}">{metadata["author"]}</a>'
+                else:
+                    author = f' by {metadata["author"]}'
+            link = f'<p><a class="bookmarklet" href="{code}">{metadata.get("name") or name}</a>{author}</p>'
+            links.append(link)
+
+        joined_links = "\n".join(links)
         html_response = f"""<html>
     <head>
         <title>Bookmarklets</title>
@@ -89,7 +119,7 @@ def server(
     <body>
         <div id="main">
             <h1>Bookmarklets</h1>
-            {links}
+            {joined_links}
         </div>
     </body>
 </html>"""
