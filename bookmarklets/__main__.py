@@ -11,9 +11,7 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 
-cli = typer.Typer(
-    context_settings={"help_option_names": ["-h", "--help"]}, no_args_is_help=True
-)
+cli = typer.Typer(context_settings={"help_option_names": ["-h", "--help"]}, no_args_is_help=True)
 
 Folder = Annotated[Path, typer.Argument(help="Folder to save the bookmarklets")]
 
@@ -41,6 +39,7 @@ def _get_code(folder: Path) -> dict[str, tuple[str, dict[str, str]]]:
             metadata = {}
             if f.readline().startswith("//"):
                 metadata = _parse_metadata(f)
+            f.seek(0)
             code[file.name[:-3]] = (f.read(), metadata)
 
     return code
@@ -61,10 +60,7 @@ def server(
         bool, typer.Option("-o", "--open", help="Open the web page in the browser")
     ] = False,
     port: Annotated[
-        int,
-        typer.Option(
-            "-p", "--port", help="Port to run the server on", min=1, max=65535
-        ),
+        int, typer.Option("-p", "--port", help="Port to run the server on", min=1, max=65535)
     ] = 8000,
     public: Annotated[bool, typer.Option(help="Make the server public")] = False,
 ):
@@ -142,7 +138,7 @@ def html(
     typer.echo(f"Writing {output}")
     with open(output, "w", encoding="utf-8") as f:
         links = "\n        ".join(
-            f'<DT><A HREF="{bookmarklet}">{name}</A>'
+            f'<DT><A HREF="{bookmarklet[0]}">{bookmarklet[1].get("name") or name}</A>'
             for name, bookmarklet in _get_bookmarklets(folder).items()
         )
         # write a bookmarks.html file for importing into browsers
