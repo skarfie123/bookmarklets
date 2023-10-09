@@ -1,3 +1,5 @@
+"""Main entrypoint."""
+
 import pathlib
 import re
 import urllib.parse
@@ -64,6 +66,7 @@ def server(
     ] = 8000,
     public: Annotated[bool, typer.Option(help="Make the server public")] = False,
 ):
+    """Start the bookmarklet server with links to all the bookmarklets."""
     typer.echo("Opening web page with all bookmarklets")
     typer.echo("Drag the bookmarklets to your bookmarks bar to install them")
     typer.echo("Press CTRL+C to stop the server")
@@ -81,8 +84,8 @@ def server(
                     author = f' by <a href="{metadata["url"]}">{metadata["author"]}</a>'
                 else:
                     author = f' by {metadata["author"]}'
-            link = f'<p><a class="bookmarklet" href="{code}">{metadata.get("name") or name}</a>{author}</p>'
-            links.append(link)
+            final_name = metadata.get("name") or name
+            links.append(f'<p><a class="bookmarklet" href="{code}">{final_name}</a>{author}</p>')
 
         joined_links = "\n".join(links)
         html_response = f"""<html>
@@ -135,6 +138,7 @@ def html(
         str, typer.Option("-o", "--output", help="Output file name")
     ] = "bookmarks.html",
 ):
+    """Generate bookmarks.html to import into browsers."""
     typer.echo(f"Writing {output}")
     with open(output, "w", encoding="utf-8") as f:
         links = "\n        ".join(
