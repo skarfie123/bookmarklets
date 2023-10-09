@@ -27,11 +27,21 @@ class Metadata:
     author: str | None
     url: str | None
 
+    @property
+    def html_comment(self) -> str:
+        """Return the HTML comment block."""
+        return f"""\
+        <!-- name: {self.name or "-"} -->
+        <!-- author: {self.author or "-"} -->
+        <!-- url: {self.url or "-"} -->
+        """
+
 
 @dataclass
 class Bookmarklet:
     """Bookmarklet data extracted from code."""
 
+    file_name: str
     code: str
     metadata: Metadata
 
@@ -39,6 +49,16 @@ class Bookmarklet:
     def bookmarklet(self) -> str:
         """Return the bookmarklet generated from code."""
         return f"javascript:(() => {{{urllib.parse.quote(self.code)}}})()"
+
+    @property
+    def name(self) -> str:
+        """Return the name of the bookmarklet."""
+        return self.metadata.name or self.file_name[:-3]
+
+    @property
+    def html_comment(self) -> str:
+        """Return the HTML comment block."""
+        return f"<!-- {self.name}.js -->\n" + self.metadata.html_comment
 
 
 def _parse_metadata(f: TextIOWrapper) -> Metadata:
@@ -58,14 +78,14 @@ def _parse_metadata(f: TextIOWrapper) -> Metadata:
     )
 
 
-def _get_code(folder: Path) -> dict[str, Bookmarklet]:
-    code = {}
+def _get_code(folder: Path) -> list[Bookmarklet]:
+    code = []
     code_files = sorted(file for file in folder.iterdir() if file.suffix == ".js")
     for file in code_files:
         with open(file, encoding="utf-8") as f:
             metadata = _parse_metadata(f)
             f.seek(0)
-            code[file.name[:-3]] = Bookmarklet(code=f.read(), metadata=metadata)
+            code.append(Bookmarklet(file_name=file.name, code=f.read(), metadata=metadata))
 
     return code
 
@@ -91,7 +111,7 @@ def server(
     @app.get("/", response_class=HTMLResponse)
     def root():
         links = []
-        for name, bookmarklet in _get_code(folder).items():
+        for bookmarklet in _get_code(folder):
             author = ""
             if bookmarklet.metadata.author:
                 if bookmarklet.metadata.url:
@@ -99,7 +119,7 @@ def server(
                 else:
                     author = f" by {bookmarklet.metadata.author}"
             links.append(
-                f'<p><a class="bookmarklet" href="{bookmarklet.bookmarklet}">{bookmarklet.metadata.name or name}</a>{author}</p>'  # noqa: E501
+                f'<p><a class="bookmarklet" href="{bookmarklet.bookmarklet}">{bookmarklet.name}</a>{author}</p>'  # noqa: E501
             )
 
         joined_links = "\n".join(links)
@@ -157,8 +177,10 @@ def html(
     typer.echo(f"Writing {output}")
     with open(output, "w", encoding="utf-8") as f:
         links = "\n        ".join(
-            f'<DT><A HREF="{bookmarklet.bookmarklet}">{bookmarklet.metadata.name or name}</A>'
-            for name, bookmarklet in _get_code(folder).items()
+            f"<!-- {bookmarklet.file_name} -->\n"
+            + bookmarklet.metadata.html_comment
+            + f'<DT><A HREF="{bookmarklet.bookmarklet}">{bookmarklet.name}</A>'
+            for bookmarklet in _get_code(folder)
         )
         # write a bookmarks.html file for importing into browsers
         # https://learn.microsoft.com/en-us/previous-versions/windows/internet-explorer/ie-developer/platform-apis/aa753582(v=vs.85)
