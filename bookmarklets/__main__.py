@@ -4,6 +4,7 @@ import pathlib
 import re
 import urllib.parse
 import webbrowser
+from dataclasses import dataclass
 from io import TextIOWrapper
 from pathlib import Path
 from typing import Annotated
@@ -18,11 +19,33 @@ cli = typer.Typer(context_settings={"help_option_names": ["-h", "--help"]}, no_a
 Folder = Annotated[Path, typer.Argument(help="Folder to save the bookmarklets")]
 
 
-def _parse_metadata(f: TextIOWrapper) -> dict[str, str]:
+@dataclass
+class Metadata:
+    """Metadata from the comment block at the top of the bookmarklet."""
+
+    name: str | None
+    author: str | None
+    url: str | None
+
+
+@dataclass
+class Bookmarklet:
+    """Bookmarklet data extracted from code."""
+
+    code: str
+    metadata: Metadata
+
+    @property
+    def bookmarklet(self) -> str:
+        """Return the bookmarklet generated from code."""
+        return f"javascript:(() => {{{urllib.parse.quote(self.code)}}})()"
+
+
+def _parse_metadata(f: TextIOWrapper) -> Metadata:
     metadata: dict[str, str] = {}
     for line in f.readlines():
         if not line.startswith("//"):
-            return metadata
+            break
         # each metadata like will be of the form:
         # "// @key value"
         # parse this with regex:
@@ -30,29 +53,21 @@ def _parse_metadata(f: TextIOWrapper) -> dict[str, str]:
         if m:
             metadata[m.group(1)] = m.group(2)
 
-    return metadata
+    return Metadata(
+        name=metadata.get("name"), author=metadata.get("author"), url=metadata.get("url")
+    )
 
 
-def _get_code(folder: Path) -> dict[str, tuple[str, dict[str, str]]]:
+def _get_code(folder: Path) -> dict[str, Bookmarklet]:
     code = {}
     code_files = sorted(file for file in folder.iterdir() if file.suffix == ".js")
     for file in code_files:
         with open(file, encoding="utf-8") as f:
-            metadata = {}
-            if f.readline().startswith("//"):
-                metadata = _parse_metadata(f)
+            metadata = _parse_metadata(f)
             f.seek(0)
-            code[file.name[:-3]] = (f.read(), metadata)
+            code[file.name[:-3]] = Bookmarklet(code=f.read(), metadata=metadata)
 
     return code
-
-
-def _get_bookmarklets(folder: Path):
-    all_code = _get_code(folder)
-    return {
-        name: (f"javascript:(() => {{{urllib.parse.quote(code[0])}}})()", code[1])
-        for name, code in all_code.items()
-    }
 
 
 @cli.command(help="Start the bookmarklet server with links to all the bookmarklets")
@@ -76,16 +91,16 @@ def server(
     @app.get("/", response_class=HTMLResponse)
     def root():
         links = []
-        for name, bookmarklet in _get_bookmarklets(folder).items():
-            code, metadata = bookmarklet
+        for name, bookmarklet in _get_code(folder).items():
             author = ""
-            if "author" in metadata:
-                if "url" in metadata:
-                    author = f' by <a href="{metadata["url"]}">{metadata["author"]}</a>'
+            if bookmarklet.metadata.author:
+                if bookmarklet.metadata.url:
+                    author = f' by <a href="{bookmarklet.metadata.url}">{bookmarklet.metadata.author}</a>'  # noqa: E501
                 else:
-                    author = f' by {metadata["author"]}'
-            final_name = metadata.get("name") or name
-            links.append(f'<p><a class="bookmarklet" href="{code}">{final_name}</a>{author}</p>')
+                    author = f" by {bookmarklet.metadata.author}"
+            links.append(
+                f'<p><a class="bookmarklet" href="{bookmarklet.bookmarklet}">{bookmarklet.metadata.name or name}</a>{author}</p>'  # noqa: E501
+            )
 
         joined_links = "\n".join(links)
         html_response = f"""<html>
@@ -142,8 +157,8 @@ def html(
     typer.echo(f"Writing {output}")
     with open(output, "w", encoding="utf-8") as f:
         links = "\n        ".join(
-            f'<DT><A HREF="{bookmarklet[0]}">{bookmarklet[1].get("name") or name}</A>'
-            for name, bookmarklet in _get_bookmarklets(folder).items()
+            f'<DT><A HREF="{bookmarklet.bookmarklet}">{bookmarklet.metadata.name or name}</A>'
+            for name, bookmarklet in _get_code(folder).items()
         )
         # write a bookmarks.html file for importing into browsers
         # https://learn.microsoft.com/en-us/previous-versions/windows/internet-explorer/ie-developer/platform-apis/aa753582(v=vs.85)

@@ -35,4 +35,4 @@ target-version = ["py310"]
 [tool.bandit]
 
 [tool.pylint."messages control"]
-disable = ["import-error"]
+disable = ["import-error", "line-too-long"]
