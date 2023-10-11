@@ -52,7 +52,11 @@ class Bookmarklet:
 
     @property
     def name(self) -> str:
-        """Return the name of the bookmarklet."""
+        """
+        Return the name of the bookmarklet.
+
+        If the name is not specified in the metadata, the name of the source file is used.
+        """
         return self.metadata.name or self.file_name[:-3]
 
     @property
@@ -62,20 +66,29 @@ class Bookmarklet:
 
 
 def _parse_metadata(f: TextIOWrapper) -> Metadata:
-    metadata: dict[str, str] = {}
+    name = None
+    author = None
+    url = None
     for line in f.readlines():
         if not line.startswith("//"):
             break
         # each metadata like will be of the form:
         # "// @key value"
-        # parse this with regex:
+        # get the key and value using regex
         m = re.match(r"// @(\w+) (\S.*)", line)
         if m:
-            metadata[m.group(1)] = m.group(2)
+            key, value = m.group(1), m.group(2)
+            match key:
+                case "name":
+                    name = value
+                case "author":
+                    author = value
+                case "url":
+                    url = value
+                case _:
+                    typer.echo(f"Ignoring unknown metadata key: {key}")
 
-    return Metadata(
-        name=metadata.get("name"), author=metadata.get("author"), url=metadata.get("url")
-    )
+    return Metadata(name=name, author=author, url=url)
 
 
 def _get_code(folder: Path) -> list[Bookmarklet]:
@@ -161,7 +174,7 @@ def server(
 
     if open_brower:
         webbrowser.open_new_tab(f"http://localhost:{port}")
-
+    # 0.0.0.0 binds on all IPs whereas 127.0.0.1 binds only on localhost
     host = "0.0.0.0" if public else "127.0.0.1"  # nosec: B104
     uvicorn.run(app, host=host, port=port)
 
