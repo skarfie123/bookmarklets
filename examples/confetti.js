@@ -1,10 +1,10 @@
 // ==Bookmarklet==
 // @name Confetti
-// @author Rahul Pai
+// @author Kiril Vatev
+// @url https://www.npmjs.com/package/canvas-confetti
 // @script https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.0/dist/confetti.browser.min.js
 // ==/Bookmarklet==
 
-// example from here https://www.npmjs.com/package/canvas-confetti
 window.confetti({
   particleCount: 100,
   startVelocity: 30,
