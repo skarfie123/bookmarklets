@@ -1,13 +1,7 @@
 """Main entrypoint."""
 
 import pathlib
-import re
-import urllib.parse
 import webbrowser
-from dataclasses import dataclass
-from functools import cached_property
-from hashlib import md5
-from io import TextIOWrapper
 from pathlib import Path
 from typing import Annotated
 
@@ -16,131 +10,12 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 
+from bookmarklets.bookmarklet import Bookmarklet
+from bookmarklets.metadata import Metadata
+
 cli = typer.Typer(context_settings={"help_option_names": ["-h", "--help"]}, no_args_is_help=True)
 
 Folder = Annotated[Path, typer.Argument(help="Folder to save the bookmarklets")]
-
-
-@dataclass
-class Metadata:
-    """Metadata from the comment block at the top of the bookmarklet."""
-
-    name: str | None
-    author: str | None
-    url: str | None
-    scripts: list[str]
-    styles: list[str]
-
-    @property
-    def html_comment(self) -> str:
-        """Return the HTML comment block."""
-        return f"""\
-        <!-- name: {self.name or "-"} -->
-        <!-- author: {self.author or "-"} -->
-        <!-- url: {self.url or "-"} -->
-        """
-
-
-@dataclass
-class Bookmarklet:
-    """Bookmarklet data extracted from code."""
-
-    file_name: str
-    code: str
-    metadata: Metadata
-
-    def _hash(self, value: str) -> str:
-        return md5(value.encode(), usedforsecurity=False).hexdigest()
-
-    def _load_script(self, code: str, script: str) -> str:
-        id_ = f"bookmarklet__script_{self._hash(script)}"
-        return f"""
-function callback(){{
-    {code}
-}}
-
-if (!document.getElementById("{id_}")) {{
-    var s = document.createElement("script");
-    if (s.addEventListener) {{
-    s.addEventListener("load", callback, false)
-    }} else if (s.readyState) {{
-    s.onreadystatechange = callback
-    }}
-    s.id = "{id_}";
-    s.src = "{script}";
-    document.body.appendChild(s);
-}} else {{
-    callback();
-}}
-    """
-
-    def _load_style(self, code: str, style: str) -> str:
-        id_ = f"bookmarklet__style_{self._hash(style)}"
-        return f"""{code}
-if (!document.getElementById("{id_}")) {{
-    var link = document.createElement("link");
-    link.id = "{id_}";
-    link.rel="stylesheet";
-    link.href = "{style}";
-    document.body.appendChild(link);
-}}
-    """
-
-    @cached_property
-    def bookmarklet(self) -> str:
-        """Return the bookmarklet generated from code."""
-        code = self.code
-        for script in reversed(self.metadata.scripts):
-            code = self._load_script(code, script)
-        for style in reversed(self.metadata.styles):
-            code = self._load_style(code, style)
-        return f"javascript:(() => {{{urllib.parse.quote(code)}}})()"
-
-    @property
-    def name(self) -> str:
-        """
-        Return the name of the bookmarklet.
-
-        If the name is not specified in the metadata, the name of the source file is used.
-        """
-        return self.metadata.name or self.file_name[:-3]
-
-    @property
-    def html_comment(self) -> str:
-        """Return the HTML comment block."""
-        return f"<!-- {self.name}.js -->\n" + self.metadata.html_comment
-
-
-def _parse_metadata(f: TextIOWrapper) -> Metadata:
-    name = None
-    author = None
-    url = None
-    scripts = []
-    styles = []
-    for line in f.readlines():
-        if not line.startswith("//"):
-            break
-        # each metadata like will be of the form:
-        # "// @key value"
-        # get the key and value using regex
-        m = re.match(r"// @(\w+) (\S.*)", line)
-        if m:
-            key, value = m.group(1), m.group(2)
-            match key:
-                case "name":
-                    name = value
-                case "author":
-                    author = value
-                case "url":
-                    url = value
-                case "script":
-                    scripts.append(value)
-                case "style":
-                    styles.append(value)
-                case _:
-                    typer.echo(f"Ignoring unknown metadata key: {key}")
-
-    return Metadata(name=name, author=author, url=url, scripts=scripts, styles=styles)
 
 
 def _get_code(folder: Path) -> list[Bookmarklet]:
@@ -148,7 +23,7 @@ def _get_code(folder: Path) -> list[Bookmarklet]:
     code_files = sorted(file for file in folder.iterdir() if file.suffix == ".js")
     for file in code_files:
         with open(file, encoding="utf-8") as f:
-            metadata = _parse_metadata(f)
+            metadata = Metadata.parse_metadata(f)
             f.seek(0)
             code.append(Bookmarklet(file_name=file.name, code=f.read(), metadata=metadata))
 
