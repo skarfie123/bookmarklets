@@ -5,6 +5,8 @@ import re
 import urllib.parse
 import webbrowser
 from dataclasses import dataclass
+from functools import cached_property
+from hashlib import md5
 from io import TextIOWrapper
 from pathlib import Path
 from typing import Annotated
@@ -26,6 +28,8 @@ class Metadata:
     name: str | None
     author: str | None
     url: str | None
+    scripts: list[str]
+    styles: list[str]
 
     @property
     def html_comment(self) -> str:
@@ -45,10 +49,52 @@ class Bookmarklet:
     code: str
     metadata: Metadata
 
-    @property
+    def _hash(self, value: str) -> str:
+        return md5(value.encode(), usedforsecurity=False).hexdigest()
+
+    def _load_script(self, code: str, script: str) -> str:
+        id_ = f"bookmarklet__script_{self._hash(script)}"
+        return f"""
+function callback(){{
+    {code}
+}}
+
+if (!document.getElementById("{id_}")) {{
+    var s = document.createElement("script");
+    if (s.addEventListener) {{
+    s.addEventListener("load", callback, false)
+    }} else if (s.readyState) {{
+    s.onreadystatechange = callback
+    }}
+    s.id = "{id_}";
+    s.src = "{script}";
+    document.body.appendChild(s);
+}} else {{
+    callback();
+}}
+    """
+
+    def _load_style(self, code: str, style: str) -> str:
+        id_ = f"bookmarklet__style_{self._hash(style)}"
+        return f"""{code}
+if (!document.getElementById("{id_}")) {{
+    var link = document.createElement("link");
+    link.id = "{id_}";
+    link.rel="stylesheet";
+    link.href = "{style}";
+    document.body.appendChild(link);
+}}
+    """
+
+    @cached_property
     def bookmarklet(self) -> str:
         """Return the bookmarklet generated from code."""
-        return f"javascript:(() => {{{urllib.parse.quote(self.code)}}})()"
+        code = self.code
+        for script in reversed(self.metadata.scripts):
+            code = self._load_script(code, script)
+        for style in reversed(self.metadata.styles):
+            code = self._load_style(code, style)
+        return f"javascript:(() => {{{urllib.parse.quote(code)}}})()"
 
     @property
     def name(self) -> str:
@@ -69,6 +115,8 @@ def _parse_metadata(f: TextIOWrapper) -> Metadata:
     name = None
     author = None
     url = None
+    scripts = []
+    styles = []
     for line in f.readlines():
         if not line.startswith("//"):
             break
@@ -85,10 +133,14 @@ def _parse_metadata(f: TextIOWrapper) -> Metadata:
                     author = value
                 case "url":
                     url = value
+                case "script":
+                    scripts.append(value)
+                case "style":
+                    styles.append(value)
                 case _:
                     typer.echo(f"Ignoring unknown metadata key: {key}")
 
-    return Metadata(name=name, author=author, url=url)
+    return Metadata(name=name, author=author, url=url, scripts=scripts, styles=styles)
 
 
 def _get_code(folder: Path) -> list[Bookmarklet]:
