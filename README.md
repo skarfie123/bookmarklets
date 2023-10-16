@@ -31,3 +31,25 @@ To convert them to bookmarklets, either start the server or generate a bookmarks
     - specify the folder with the javascript files, otherwise the current folder is used
     - use `-o`/`--output` to specify the output file, otherwise it defaults to `bookmarks.html`
 2. import the `bookmarks.html` into your browser
+
+## Metadata
+
+You can include some metadata in a comment block at the top of the source file.
+
+The fields that you can use are:
+
+- name: the name of the bookmarklet (if not provided, the file name will be used)
+  - in the server this will be the name of the button
+  - in the html this will be the name of the bookmark, and included in a comment
+- author : the author of the bookmarklet
+  - in the server this will be mentioned next to the button
+  - in the html this will be included in a comment
+- url: link to the author
+  - in the server this will be linked to the author
+  - in the html this will be included in a comment
+- script: script to load before running the bookmarklet
+  - specify it multiple times to use multiple scripts
+- style: style to load before running the bookmarklet
+  - specify it multiple times to use multiple styles
+
+See the examples in this repo.
