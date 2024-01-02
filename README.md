@@ -1,5 +1,9 @@
 # Bookmarklets
 
+![PyPI version](https://img.shields.io/pypi/v/bookmarklets)
+![PyPI downloads](https://img.shields.io/pypi/dm/bookmarklets)
+![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)
+
 A tool for developing bookmarklets.
 
 Inspired by <https://github.com/mrcoles/bookmarklet>, but designed to support multiple bookmarklets, and to also export as html.
