@@ -6,9 +6,9 @@ authors = [{ name = "skarfie123", email = "rahulpai@rocketmail.com" }]
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "fastapi>=0.103.2,<0.104.0",
-    "typer>=0.20.0",
-    "uvicorn[standard]>=0.23.2,<0.24.0",
+    "fastapi~=0.103.2",
+    "typer~=0.20.0",
+    "uvicorn[standard]~=0.23.2",
 ]
 
 [project.urls]
